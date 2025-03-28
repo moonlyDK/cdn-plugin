@@ -4,8 +4,8 @@
  * Plugin Name:       Moonly CDN
  * Description:       
  * Requires at least: 6.3.0
- * Requires PHP:      7.4
- * Version:           0.0.2
+ * Requires PHP:      8.1
+ * Version:           1.0.0
  * Author:            COS
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
