@@ -4,6 +4,36 @@ if (!defined('ABSPATH')) {
     exit; // Exit if accessed directly.
 }
 
+// Function to check if domain is allowed
+function is_domain_allowed($domain) {
+    // Check if ACF is active
+    if (!function_exists('get_field')) {
+        return false;
+    }
+
+    // Get allowed domains from ACF options page
+    $allowed_domains = get_field('global__allowed_domains', 'domains_acf_op');
+    
+    if (!$allowed_domains) {
+        return false;
+    }
+
+    // Clean the input domain
+    $domain = strtolower(trim($domain));
+
+    // Check if domain exists in allowed domains
+    foreach ($allowed_domains as $allowed) {
+        if (isset($allowed['domain_name'])) {
+            $allowed_domain = strtolower(trim($allowed['domain_name']));
+            if ($domain === $allowed_domain) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 // Automatically upload video files to CDN Hub, delete locally, and update attachment URLs
 add_filter('wp_handle_upload', 'auto_upload_video_to_cdn_hub');
 
@@ -13,6 +43,17 @@ function auto_upload_video_to_cdn_hub($upload) {
 
     if (!in_array(strtolower($filetype['ext']), $video_types)) {
         return $upload; // Skip if not video
+    }
+
+    // Get domain and convert from punycode to UTF-8 if needed
+    $client_domain_raw = parse_url(get_site_url(), PHP_URL_HOST);
+    if (function_exists('idn_to_utf8')) {
+        $client_domain_raw = idn_to_utf8($client_domain_raw, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
+    }
+
+    // Check if domain is allowed
+    if (!is_domain_allowed($client_domain_raw)) {
+        return new WP_Error('upload_error', 'This domain is not authorized to upload videos to the CDN.');
     }
 
     // Set maximum allowed file size (e.g., 500MB)
@@ -26,12 +67,6 @@ function auto_upload_video_to_cdn_hub($upload) {
 
     // CDN Hub REST endpoint
     $cdn_api_url = 'https://moonlycdn.com/wp-json/cdn/v1/upload-video';
-
-    // Get domain and convert from punycode to UTF-8 if needed
-    $client_domain_raw = parse_url(get_site_url(), PHP_URL_HOST);
-    if (function_exists('idn_to_utf8')) {
-        $client_domain_raw = idn_to_utf8($client_domain_raw, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
-    }
 
     // Replace Danish special characters
     $special_chars = ['æ', 'ø', 'å', 'Æ', 'Ø', 'Å'];
