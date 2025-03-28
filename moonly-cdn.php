@@ -5,12 +5,12 @@
  * Description:       Moonly CDN is a plugin that allows you to host your videos on the Moonly CDN.
  * Requires at least: 6.3.0
  * Requires PHP:      8.1
- * Version:           1.0.1
- * Author:            MOONLY 
+ * Version:           1.0.2
+ * Author:            Moonly
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain:       moonly_cdn
- * Website:           
+ * Website:           https://moonly.dk
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -39,4 +39,3 @@ new MOONLYCDN_DPUpdateChecker(
 	constant($plugin_prefix . '_CACHE_KEY'),
 	constant($plugin_prefix . '_REMOTE_URL'),
 );
-
