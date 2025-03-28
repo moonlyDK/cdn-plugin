@@ -54,4 +54,4 @@ jobs:
         with:
           files: moonly-cdn.zip
         env:
-          GITHUB_TOKEN: ${{ secrets.YOUR_GITHUB_TOKEN }} # Ensure this token has the right permissions and change secret from GITHUB_TOKEN to your name
+          GITHUB_TOKEN: ${{ secrets.MOONLY_CDN_GITHUB_SECRET }} # Ensure this token has the right permissions and change secret from GITHUB_TOKEN to your name
