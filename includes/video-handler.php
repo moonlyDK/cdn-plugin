@@ -72,6 +72,10 @@ function add_domain_debug_script() {
     <?php
 }
 
+// Function to check if plugin is active
+function is_moonly_cdn_active() {
+    return is_plugin_active('moonly-cdn/moonly-cdn.php');
+}
 
 // Function to check if domain is allowed
 function is_domain_allowed($domain) {
@@ -110,6 +114,55 @@ function is_domain_allowed($domain) {
     $response_data = json_decode($response, true);
     if (!$response_data) {
         error_log('Moonly CDN: Invalid response from moonlycdn.com');
+        return false;
+    }
+
+    return isset($response_data['allowed']) && $response_data['allowed'] === true;
+}
+
+// Function to check video access
+function is_video_access_allowed() {
+    // Check if plugin is active
+    if (!is_moonly_cdn_active()) {
+        error_log('Moonly CDN: Plugin is not active');
+        return false; 
+    }
+
+    // Get current domain
+    $client_domain_raw = parse_url(get_site_url(), PHP_URL_HOST);
+    if (function_exists('idn_to_utf8')) {
+        $client_domain_raw = idn_to_utf8($client_domain_raw, IDNA_DEFAULT, INTL_IDNA_VARIANT_UTS46);
+    }
+
+    // Make a request to CDN to check access
+    $check_url = 'https://moonlycdn.com/wp-json/cdn/v1/check-video-access';
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $check_url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'X-API-KEY: 9mMUnMBspcEfFXqz6hMh8AxEByEE4ChB',
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode([
+        'client_domain' => $client_domain_raw
+    ]));
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+    
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($http_code !== 200) {
+        error_log('Moonly CDN: Failed to check video access');
+        return false;
+    }
+
+    $response_data = json_decode($response, true);
+    if (!$response_data) {
+        error_log('Moonly CDN: Invalid response from CDN');
         return false;
     }
 
@@ -241,7 +294,13 @@ add_filter('wp_prepare_attachment_for_js', 'fix_media_library_file_size', 10, 3)
 
 function use_cdn_url_for_attachments($url, $attachment_id) {
     $attached_file = get_post_meta($attachment_id, '_wp_attached_file', true);
+    
+    // Only check access for CDN URLs
     if (strpos($attached_file, 'https://') === 0) {
+        // If access is not allowed, return a placeholder URL
+        if (!is_video_access_allowed()) {
+            return plugins_url('assets/video-disabled.mp4', dirname(__FILE__));
+        }
         return $attached_file;
     }
     return $url;
@@ -283,4 +342,132 @@ function delete_cdn_video_on_attachment_delete($attachment_id) {
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_exec($ch);
     curl_close($ch);
+}
+
+// Add server-side protection for direct video access
+add_action('template_redirect', 'protect_cdn_video_access');
+function protect_cdn_video_access() {
+    // Only check if the request is for a video file
+    if (!isset($_SERVER['REQUEST_URI'])) {
+        return;
+    }
+
+    $request_uri = $_SERVER['REQUEST_URI'];
+    if (strpos($request_uri, '.mp4') === false && strpos($request_uri, '.webm') === false) {
+        return;
+    }
+
+    // Check if the request is for a CDN video
+    if (strpos($request_uri, 'moonlycdn.com') === false) {
+        return;
+    }
+
+    // Check if access is allowed
+    if (!is_video_access_allowed()) {
+        header('HTTP/1.0 403 Forbidden');
+        header('Content-Type: text/plain');
+        echo 'Access to this video has been disabled.';
+        exit;
+    }
+}
+
+// Add JavaScript to check access on video elements
+add_action('wp_footer', 'add_video_access_check_script');
+function add_video_access_check_script() {
+    ?>
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Function to check video access
+        function checkVideoAccess() {
+            return fetch('<?php echo admin_url('admin-ajax.php'); ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'action=check_video_access'
+            })
+            .then(response => response.json())
+            .then(data => data.allowed);
+        }
+
+        // Function to handle video elements
+        function handleVideoElements() {
+            document.querySelectorAll('video').forEach(function(video) {
+                // If video source is from CDN
+                if (video.src && video.src.includes('moonlycdn.com')) {
+                    // Check access before allowing playback
+                    checkVideoAccess().then(function(allowed) {
+                        if (!allowed) {
+                            // Stop playback
+                            video.pause();
+                            video.currentTime = 0;
+                            
+                            // Show error message
+                            const errorDiv = document.createElement('div');
+                            errorDiv.style.cssText = 'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.8); color: white; padding: 20px; border-radius: 5px; text-align: center; z-index: 1000;';
+                            errorDiv.innerHTML = 'Video access has been disabled. Please contact your administrator.';
+                            
+                            // Add error message to video container
+                            video.parentNode.style.position = 'relative';
+                            video.parentNode.appendChild(errorDiv);
+                        }
+                    });
+                }
+            });
+        }
+
+        // Initial check
+        handleVideoElements();
+
+        // Check every 30 seconds
+        setInterval(handleVideoElements, 30000);
+
+        // Check when video starts playing
+        document.addEventListener('play', function(e) {
+            if (e.target.tagName === 'VIDEO' && e.target.src.includes('moonlycdn.com')) {
+                checkVideoAccess().then(function(allowed) {
+                    if (!allowed) {
+                        e.target.pause();
+                        e.target.currentTime = 0;
+                    }
+                });
+            }
+        }, true);
+
+        // Check when video source changes
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
+                    const video = mutation.target;
+                    if (video.src && video.src.includes('moonlycdn.com')) {
+                        checkVideoAccess().then(function(allowed) {
+                            if (!allowed) {
+                                video.pause();
+                                video.currentTime = 0;
+                            }
+                        });
+                    }
+                }
+            });
+        });
+
+        // Observe all video elements for source changes
+        document.querySelectorAll('video').forEach(function(video) {
+            observer.observe(video, {
+                attributes: true,
+                attributeFilter: ['src']
+            });
+        });
+    });
+    </script>
+    <?php
+}
+
+// Add AJAX endpoint for video access check
+add_action('wp_ajax_check_video_access', 'ajax_check_video_access');
+add_action('wp_ajax_nopriv_check_video_access', 'ajax_check_video_access');
+function ajax_check_video_access() {
+    wp_send_json([
+        'allowed' => is_video_access_allowed()
+    ]);
 } 
