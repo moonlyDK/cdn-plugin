@@ -1,0 +1,14 @@
+node_modules/
+src/
+
+**/.DS_Store
+
+.distignore 
+.git/
+.github/
+.gitignore
+
+package-lock.json 
+package.json
+readme.txt
+readme.md
