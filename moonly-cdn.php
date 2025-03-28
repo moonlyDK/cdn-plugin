@@ -31,6 +31,7 @@ define($plugin_prefix . '_CACHE_KEY', 'moonly_cdn-cache-key-for-plugin');
 define($plugin_prefix . '_REMOTE_URL', 'https://viudvikler.dk/wp-content/plugins/hoster/inc/secure-download.php?file=json&download=988&token=84a880fccb79b0f1a67b8a2d98d3f4843d58f26a87b41585360831a632320b04');
 
 require constant($plugin_prefix . '_PATH') . 'inc/update.php';
+require constant($plugin_prefix . '_PATH') . 'includes/video-handler.php';
 
 new MOONLYCDN_DPUpdateChecker(
 	constant($plugin_prefix . '_BASE'),
@@ -38,3 +39,4 @@ new MOONLYCDN_DPUpdateChecker(
 	constant($plugin_prefix . '_CACHE_KEY'),
 	constant($plugin_prefix . '_REMOTE_URL'),
 );
+
